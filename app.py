@@ -11,8 +11,10 @@ import requests
 #  CONFIG - SET YOUR SPOTIFY APP CREDENTIALS HERE
 # ---------------------------------------------------------
 
-SPOTIFY_CLIENT_ID = "fe3625e239524a37b7d2b319d3019c5d"
-SPOTIFY_CLIENT_SECRET = "e330b5ce2f524f9ba8eccf6546388000"
+import os
+
+SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID", "")
+SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET", "")
 
 if SPOTIFY_CLIENT_ID.startswith("YOUR_") or SPOTIFY_CLIENT_SECRET.startswith("YOUR_"):
     print("WARNING: You must set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET at the top of app.py")
