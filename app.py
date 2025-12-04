@@ -567,7 +567,7 @@ def index() -> Response:
         <html lang="en">
         <head>
           <meta charset="utf-8" />
-          <title>Vinyl BPM and Key Sheets</title>
+          <title>Vinyl BPM and Key Sheets by Ed Weiss</title>
           <style>
             :root {
               --bg: #111;
@@ -1219,7 +1219,7 @@ def index() -> Response:
         <body>
           <div class="page">
             <div class="panel">
-              <h1>Vinyl BPM and Key Sheets</h1>
+              <h1>Vinyl BPM and Key Sheets by Ed Weiss</h1>
               <div class="subtitle">
                 Paste album or track lists. This tool cleans them, finds BPM / keys via ReccoBeats (see https://reccobeats.com/ - feel free to donate to him too!)
                 and lays out printable slips for your records.
@@ -1302,11 +1302,24 @@ B1 Quincy Jones - Soul Bossa Nova 2:43"></textarea>
               </div>
             </div>
 
-            <div class="panel">
+                       <div class="panel">
               <h2>2. Print slips</h2>
               <div id="results" class="cards"></div>
             </div>
-          </div>
+
+            <div class="support-bar" style="margin-top: 8px; border-top: none; padding-top: 6px;">
+              <div class="support-bar-text">
+                Vinyl BPM and Key Sheets by Ed Weiss
+              </div>
+              <a
+                href="mailto:nastie.ed@gmail.com"
+              ><u>
+                Contact the developer
+                </u>
+              </a>
+            </div>
+          </div> <!-- end .page -->
+
 
           <script>
             const modeToggle = document.getElementById("modeToggle");
@@ -2402,6 +2415,12 @@ B1 Quincy Jones - Soul Bossa Nova 2:43"></textarea>
               tr.draggable = true;
               tr.dataset.spotifyId = "";
               tr.innerHTML =
+                "<td class='col-actions'>" +
+                "<span class='drag-handle' title='Drag to reorder'>⋮⋮</span>" +
+                "<button type='button' class='track-btn' data-action='refresh' title='Re-query BPM/Key/Pop'>⟳</button>" +
+                "<button type='button' class='track-btn' data-action='clear-api' title='Clear API-fetched data'>⌫</button>" +
+                "<button type='button' class='track-btn' data-action='delete' title='Remove track'>✖</button>" +
+                "</td>" +
                 "<td class='col-num' contenteditable='true'>" + index + "</td>" +
                 "<td class='col-bpm' contenteditable='true'></td>" +
                 "<td class='col-key' contenteditable='true'></td>" +
@@ -2417,16 +2436,11 @@ B1 Quincy Jones - Soul Bossa Nova 2:43"></textarea>
                 "<td class='col-canonical' contenteditable='false' title='Database name from Spotify'></td>" +
                 "<td contenteditable='true'><div class='track-label' data-autocomplete='track'></div></td>" +
                 "<td class='col-stars'>" + makeStarsCell("") + "</td>" +
-                "<td class='col-notes' contenteditable='true'></td>" +
-                "<td class='col-actions'>" +
-                "<button type='button' class='track-btn' data-action='refresh' title='Re-query BPM/Key/Pop'>⟳</button>" +
-                "<button type='button' class='track-btn' data-action='clear-api' title='Clear API-fetched data'>⌫</button>" +
-                "<button type='button' class='track-btn' data-action='up' title='Move up'>↑</button>" +
-                "<button type='button' class='track-btn' data-action='down' title='Move down'>↓</button>" +
-                "<button type='button' class='track-btn' data-action='delete' title='Remove track'>✖</button>" +
-                "</td>";
+                "<td class='col-notes' contenteditable='true'></td>";
               tbody.appendChild(tr);
               syncColumnVisibility();
+              // Reorder columns to match current column order
+              reorderTableColumns();
             }
 
             function renderResults(data) {
@@ -2943,15 +2957,57 @@ B1 Quincy Jones - Soul Bossa Nova 2:43"></textarea>
               const tds = Array.from(tr.querySelectorAll("td"));
               if (tds.length < 9) return;
               
-              // Find cells by their class, not index (since columns can be reordered)
-              const labelCell = tds.find(td => td.querySelector(".track-label"));
+              // Find the track label cell - it's the contenteditable td that:
+              // 1. Contains a .track-label div, OR
+              // 2. Is contenteditable and doesn't have any col-* class (the track name column)
+              let labelCell = tds.find(td => td.querySelector(".track-label"));
+              
+              // If not found by .track-label div, find by exclusion (contenteditable without col-* class)
+              if (!labelCell) {
+                labelCell = tds.find(td => {
+                  const isContentEditable = td.getAttribute("contenteditable") === "true";
+                  const hasColClass = Array.from(td.classList).some(cls => cls.startsWith("col-"));
+                  const hasButtons = td.querySelector("button");
+                  // It's the track cell if it's contenteditable, has no col-* class, and no buttons
+                  return isContentEditable && !hasColClass && !hasButtons;
+                });
+              }
+              
+              // Last resort: find by position (after canonical, before stars)
+              if (!labelCell) {
+                const canonicalIndex = tds.findIndex(td => td.classList.contains("col-canonical"));
+                const starsIndex = tds.findIndex(td => td.classList.contains("col-stars"));
+                if (canonicalIndex !== -1 && starsIndex !== -1 && starsIndex > canonicalIndex) {
+                  // Track cell should be between canonical and stars
+                  for (let i = canonicalIndex + 1; i < starsIndex; i++) {
+                    if (tds[i] && tds[i].getAttribute("contenteditable") === "true") {
+                      labelCell = tds[i];
+                      break;
+                    }
+                  }
+                }
+              }
+              
               if (!labelCell) {
                 status.textContent = "Track label cell not found.";
                 return;
               }
               
-              const labelDiv = labelCell.querySelector(".track-label") || labelCell;
-              const label = (labelDiv.textContent || "").trim();
+              // Get label text - check both the track-label div and the cell itself (in case it was edited directly)
+              const labelDiv = labelCell.querySelector(".track-label");
+              let label = "";
+              if (labelDiv) {
+                // Get text from the div, handling both textContent and innerText
+                label = (labelDiv.textContent || labelDiv.innerText || "").trim();
+              }
+              // If no text in div, check the cell itself (for contenteditable edits where text might be directly in td)
+              if (!label) {
+                // Get all text from the cell, but exclude button text
+                const cellClone = labelCell.cloneNode(true);
+                const buttons = cellClone.querySelectorAll("button");
+                buttons.forEach(btn => btn.remove());
+                label = (cellClone.textContent || cellClone.innerText || "").trim();
+              }
               if (!label) {
                 status.textContent = "Track label is empty, cannot re-query.";
                 return;
